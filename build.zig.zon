@@ -1,0 +1,21 @@
+.{
+    .fingerprint = 0xeaae85def96486,
+    .name = .configflow,
+    .version = "0.1.0",
+    .minimum_zig_version = "0.15.1",
+    .dependencies = .{
+        .zcli = .{
+            .url = "https://github.com/ryanhair/zcli/archive/refs/tags/v0.14.0.tar.gz",
+            .hash = "zcli-0.14.0-0BMTAOpHEwBtbabOu3gPnclTCTgL4SmZrYeV9N8ATCFo",
+        },
+        .yaml = .{
+            .path = "../../zig-yaml",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "packages",
+        "README.md",
+    },
+}
