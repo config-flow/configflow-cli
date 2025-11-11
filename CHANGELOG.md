@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-01-11
+
+### Changed
+- Reorganized unit tests to follow idiomatic Zig pattern (tests colocated with source code)
+- Updated dependency management to use GitHub URLs instead of relative paths
+- Added Windows build targets (x86_64 and aarch64) to release workflow
+
+### Removed
+- Standalone test files (tests now live in source files)
+- Unused manual test executables (test_resolver, test_sources, test_vault_comprehensive)
+- Unused root.zig template file
+
 ## [0.1.0] - 2025-01-10
 
 ### Added

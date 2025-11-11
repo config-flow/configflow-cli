@@ -78,7 +78,6 @@ pub fn build(b: *std.Build) void {
             .path = "src/plugins/zcli_completions",
         } },
         .app_name = "configflow",
-        .app_version = "0.1.0",
         .app_description = "Type-safe configuration with clarity for developers",
     });
 
