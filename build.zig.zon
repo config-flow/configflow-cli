@@ -9,7 +9,8 @@
             .hash = "zcli-0.14.0-0BMTAOpHEwBtbabOu3gPnclTCTgL4SmZrYeV9N8ATCFo",
         },
         .yaml = .{
-            .path = "../../zig-yaml",
+            .url = "https://github.com/ryanhair/zig-yaml/archive/cb57cafa2cd85bfa7c8df67ca55c63858d1ae61f.tar.gz",
+            .hash = "zig_yaml-0.2.0-C1161qyrAgAyCAoCF3hCxhhU-KAr__1HU-wbT4JKujgJ",
         },
     },
     .paths = .{
@@ -19,4 +20,3 @@
         "README.md",
     },
 }
-
