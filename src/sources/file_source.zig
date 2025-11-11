@@ -161,13 +161,19 @@ test "FileSource init and deinit" {
 test "FileSource fetch from valid .env file" {
     const allocator = std.testing.allocator;
 
-    // Create temp file
-    const tmp_file = try std.fs.cwd().createFile("/tmp/test_configflow_file.env", .{});
-    defer std.fs.cwd().deleteFile("/tmp/test_configflow_file.env") catch {};
+    // Create temp directory and file
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+
+    const tmp_file = try tmp_dir.dir.createFile("test.env", .{});
     try tmp_file.writeAll("DATABASE_URL=postgresql://localhost/test\nPORT=3000\nDEBUG=true\n");
     tmp_file.close();
 
-    const file_source = try FileSource.init(allocator, "test", "/tmp/test_configflow_file.env");
+    // Get absolute path
+    const tmp_path = try tmp_dir.dir.realpathAlloc(allocator, "test.env");
+    defer allocator.free(tmp_path);
+
+    const file_source = try FileSource.init(allocator, "test", tmp_path);
     const backend = file_source.backend();
     defer backend.deinit();
 
@@ -188,13 +194,18 @@ test "FileSource fetch from valid .env file" {
 test "FileSource fetch non-existent key" {
     const allocator = std.testing.allocator;
 
-    // Create temp file
-    const tmp_file = try std.fs.cwd().createFile("/tmp/test_configflow_file2.env", .{});
-    defer std.fs.cwd().deleteFile("/tmp/test_configflow_file2.env") catch {};
+    // Create temp directory and file
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+
+    const tmp_file = try tmp_dir.dir.createFile("test.env", .{});
     try tmp_file.writeAll("DATABASE_URL=postgresql://localhost/test\n");
     tmp_file.close();
 
-    const file_source = try FileSource.init(allocator, "test", "/tmp/test_configflow_file2.env");
+    const tmp_path = try tmp_dir.dir.realpathAlloc(allocator, "test.env");
+    defer allocator.free(tmp_path);
+
+    const file_source = try FileSource.init(allocator, "test", tmp_path);
     const backend = file_source.backend();
     defer backend.deinit();
 
@@ -206,13 +217,18 @@ test "FileSource fetch non-existent key" {
 test "FileSource fetchAll returns all values" {
     const allocator = std.testing.allocator;
 
-    // Create temp file
-    const tmp_file = try std.fs.cwd().createFile("/tmp/test_configflow_file3.env", .{});
-    defer std.fs.cwd().deleteFile("/tmp/test_configflow_file3.env") catch {};
+    // Create temp directory and file
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+
+    const tmp_file = try tmp_dir.dir.createFile("test.env", .{});
     try tmp_file.writeAll("KEY1=value1\nKEY2=value2\nKEY3=value3\n");
     tmp_file.close();
 
-    const file_source = try FileSource.init(allocator, "test", "/tmp/test_configflow_file3.env");
+    const tmp_path = try tmp_dir.dir.realpathAlloc(allocator, "test.env");
+    defer allocator.free(tmp_path);
+
+    const file_source = try FileSource.init(allocator, "test", tmp_path);
     const backend = file_source.backend();
     defer backend.deinit();
 
@@ -237,9 +253,11 @@ test "FileSource fetchAll returns all values" {
 test "FileSource handles comments and empty lines" {
     const allocator = std.testing.allocator;
 
-    // Create temp file with comments
-    const tmp_file = try std.fs.cwd().createFile("/tmp/test_configflow_file4.env", .{});
-    defer std.fs.cwd().deleteFile("/tmp/test_configflow_file4.env") catch {};
+    // Create temp directory and file with comments
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+
+    const tmp_file = try tmp_dir.dir.createFile("test.env", .{});
     try tmp_file.writeAll(
         \\# This is a comment
         \\DATABASE_URL=postgresql://localhost/test
@@ -250,7 +268,10 @@ test "FileSource handles comments and empty lines" {
     );
     tmp_file.close();
 
-    const file_source = try FileSource.init(allocator, "test", "/tmp/test_configflow_file4.env");
+    const tmp_path = try tmp_dir.dir.realpathAlloc(allocator, "test.env");
+    defer allocator.free(tmp_path);
+
+    const file_source = try FileSource.init(allocator, "test", tmp_path);
     const backend = file_source.backend();
     defer backend.deinit();
 
@@ -272,13 +293,18 @@ test "FileSource handles comments and empty lines" {
 test "FileSource handles values with equals signs" {
     const allocator = std.testing.allocator;
 
-    // Create temp file
-    const tmp_file = try std.fs.cwd().createFile("/tmp/test_configflow_file5.env", .{});
-    defer std.fs.cwd().deleteFile("/tmp/test_configflow_file5.env") catch {};
+    // Create temp directory and file
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+
+    const tmp_file = try tmp_dir.dir.createFile("test.env", .{});
     try tmp_file.writeAll("URL=https://example.com?foo=bar&baz=qux\n");
     tmp_file.close();
 
-    const file_source = try FileSource.init(allocator, "test", "/tmp/test_configflow_file5.env");
+    const tmp_path = try tmp_dir.dir.realpathAlloc(allocator, "test.env");
+    defer allocator.free(tmp_path);
+
+    const file_source = try FileSource.init(allocator, "test", tmp_path);
     const backend = file_source.backend();
     defer backend.deinit();
 
@@ -308,12 +334,17 @@ test "FileSource handles missing file gracefully" {
 test "FileSource handles empty file" {
     const allocator = std.testing.allocator;
 
-    // Create empty temp file
-    const tmp_file = try std.fs.cwd().createFile("/tmp/test_configflow_empty.env", .{});
-    defer std.fs.cwd().deleteFile("/tmp/test_configflow_empty.env") catch {};
+    // Create temp directory and empty file
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+
+    const tmp_file = try tmp_dir.dir.createFile("test.env", .{});
     tmp_file.close();
 
-    const file_source = try FileSource.init(allocator, "test", "/tmp/test_configflow_empty.env");
+    const tmp_path = try tmp_dir.dir.realpathAlloc(allocator, "test.env");
+    defer allocator.free(tmp_path);
+
+    const file_source = try FileSource.init(allocator, "test", tmp_path);
     const backend = file_source.backend();
     defer backend.deinit();
 
@@ -334,13 +365,18 @@ test "FileSource handles empty file" {
 test "FileSource handles multiline values with quotes" {
     const allocator = std.testing.allocator;
 
-    // Create temp file with quoted value
-    const tmp_file = try std.fs.cwd().createFile("/tmp/test_configflow_file6.env", .{});
-    defer std.fs.cwd().deleteFile("/tmp/test_configflow_file6.env") catch {};
+    // Create temp directory and file with quoted value
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+
+    const tmp_file = try tmp_dir.dir.createFile("test.env", .{});
     try tmp_file.writeAll("MESSAGE=\"Hello World\"\n");
     tmp_file.close();
 
-    const file_source = try FileSource.init(allocator, "test", "/tmp/test_configflow_file6.env");
+    const tmp_path = try tmp_dir.dir.realpathAlloc(allocator, "test.env");
+    defer allocator.free(tmp_path);
+
+    const file_source = try FileSource.init(allocator, "test", tmp_path);
     const backend = file_source.backend();
     defer backend.deinit();
 
