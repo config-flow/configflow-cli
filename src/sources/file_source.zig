@@ -123,7 +123,7 @@ pub const FileSource = struct {
                 // Remove quotes if present
                 const unquoted_value = if (value.len >= 2 and
                     ((value[0] == '"' and value[value.len - 1] == '"') or
-                    (value[0] == '\'' and value[value.len - 1] == '\'')))
+                        (value[0] == '\'' and value[value.len - 1] == '\'')))
                     value[1 .. value.len - 1]
                 else
                     value;
