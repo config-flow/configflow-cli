@@ -24,12 +24,6 @@ jobs:
           - os: macos-latest
             target: aarch64-macos
             zig_target: aarch64-macos
-          - os: windows-latest
-            target: x86_64-windows
-            zig_target: x86_64-windows
-          - os: windows-latest
-            target: aarch64-windows
-            zig_target: aarch64-windows
 
     steps:
       - name: Checkout code
@@ -61,29 +55,21 @@ jobs:
       - name: Package binary
         run: |
           mkdir -p dist
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cp zig-out/bin/${{ steps.appname.outputs.name }}.exe dist/${{ steps.appname.outputs.name }}-${{ matrix.target }}.exe
-          else
-            cp zig-out/bin/${{ steps.appname.outputs.name }} dist/${{ steps.appname.outputs.name }}-${{ matrix.target }}
-            chmod +x dist/${{ steps.appname.outputs.name }}-${{ matrix.target }}
-          fi
-        shell: bash
+          cp zig-out/bin/${{ steps.appname.outputs.name }} dist/${{ steps.appname.outputs.name }}-${{ matrix.target }}
+          chmod +x dist/${{ steps.appname.outputs.name }}-${{ matrix.target }}
 
       - name: Generate checksum
         run: |
           cd dist
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            shasum -a 256 ${{ steps.appname.outputs.name }}-${{ matrix.target }}.exe > ${{ steps.appname.outputs.name }}-${{ matrix.target }}.exe.sha256
-          else
-            shasum -a 256 ${{ steps.appname.outputs.name }}-${{ matrix.target }} > ${{ steps.appname.outputs.name }}-${{ matrix.target }}.sha256
-          fi
-        shell: bash
+          shasum -a 256 ${{ steps.appname.outputs.name }}-${{ matrix.target }} > ${{ steps.appname.outputs.name }}-${{ matrix.target }}.sha256
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.appname.outputs.name }}-${{ matrix.target }}
-          path: dist/*
+          path: |
+            dist/${{ steps.appname.outputs.name }}-${{ matrix.target }}
+            dist/${{ steps.appname.outputs.name }}-${{ matrix.target }}.sha256
 
   release:
     name: Create Release
