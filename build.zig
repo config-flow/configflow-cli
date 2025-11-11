@@ -18,6 +18,11 @@ pub fn build(b: *std.Build) void {
     });
     const yaml_module = yaml_dep.module("yaml");
 
+    // Create clients module
+    const clients_module = b.createModule(.{
+        .root_source_file = b.path("src/clients.zig"),
+    });
+
     // Create sources module
     const sources_module = b.createModule(.{
         .root_source_file = b.path("src/sources.zig"),
@@ -142,6 +147,27 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    // Add AWS client tests
+    const test_aws_client = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/clients/aws_secrets_manager.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
+    // Add AWS source tests
+    const test_aws_source = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/sources/aws_source.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "clients", .module = clients_module },
+            },
+        }),
+    });
+
     // Add test step
     const exe_unit_tests = b.addTest(.{
         .root_module = b.createModule(.{
@@ -162,6 +188,8 @@ pub fn build(b: *std.Build) void {
     const run_test_validation_schema_parser = b.addRunArtifact(test_validation_schema_parser);
     const run_test_file_source = b.addRunArtifact(test_file_source);
     const run_test_env_source = b.addRunArtifact(test_env_source);
+    const run_test_aws_client = b.addRunArtifact(test_aws_client);
+    const run_test_aws_source = b.addRunArtifact(test_aws_source);
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_exe_unit_tests.step);
@@ -170,4 +198,6 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_test_validation_schema_parser.step);
     test_step.dependOn(&run_test_file_source.step);
     test_step.dependOn(&run_test_env_source.step);
+    test_step.dependOn(&run_test_aws_client.step);
+    test_step.dependOn(&run_test_aws_source.step);
 }
