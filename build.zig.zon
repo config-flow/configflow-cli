@@ -1,7 +1,7 @@
 .{
     .fingerprint = 0xeaae85def96486,
     .name = .configflow,
-    .version = "0.4.0",
+    .version = "0.5.0",
     .minimum_zig_version = "0.15.1",
     .dependencies = .{
         .zcli = .{
@@ -20,4 +20,5 @@
         "README.md",
     },
 }
+
 
