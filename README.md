@@ -196,9 +196,10 @@ sources:
     path: staging/myapp
 
   prod:
-    type: vault
-    mount: secret
-    path: prod/myapp
+    type: aws_secrets_manager
+    region: us-east-1
+    mode: json
+    secret_name: myapp/prod/config
 
 contexts:
   local:
@@ -213,6 +214,33 @@ contexts:
 - `.env` files
 - Environment variables
 - HashiCorp Vault (KV v1 and v2)
+- AWS Secrets Manager (individual & JSON modes)
+
+### AWS Secrets Manager Configuration
+
+ConfigFlow supports two modes for AWS Secrets Manager:
+
+**Individual mode** (each config key = separate AWS secret):
+```yaml
+sources:
+  aws_prod:
+    type: aws_secrets_manager
+    region: us-east-1
+    mode: individual
+    prefix: myapp/prod/
+```
+
+**JSON mode** (one secret with multiple keys):
+```yaml
+sources:
+  aws_prod:
+    type: aws_secrets_manager
+    region: us-east-1
+    mode: json
+    secret_name: myapp/prod/config
+```
+
+Authentication uses standard AWS credentials (env vars, `~/.aws/credentials`). See [docs/AWS_SECRETS_MANAGER.md](docs/AWS_SECRETS_MANAGER.md) for details.
 
 ---
 
@@ -325,10 +353,11 @@ ConfigFlow catches common mistakes automatically:
 - ✗ Can't debug why values are wrong
 - ✗ No type safety
 
-**AWS Secrets Manager, GCP Secret Manager**
+**AWS/GCP Secret Managers (standalone)**
 - ✗ Cloud-specific (vendor lock-in)
 - ✗ No local development story
 - ✗ Expensive for small teams
+- ✗ No validation or type checking
 - ✗ No configuration clarity features
 
 **Vault, etcd, Consul**
@@ -342,7 +371,7 @@ ConfigFlow catches common mistakes automatically:
 - ✓ **Type-safe:** Catch errors before they reach production
 - ✓ **Clear:** Know exactly where values come from
 - ✓ **Fast:** CLI tool, no servers to maintain
-- ✓ **Universal:** Works with files, env vars, Vault
+- ✓ **Universal:** Works with files, env vars, Vault, AWS Secrets Manager
 - ✓ **Simple:** 5 minute setup, no infrastructure
 
 ---
@@ -402,7 +431,7 @@ DATABASE_URL:
 **V1 (Current):**
 - ✓ CLI with 8 commands
 - ✓ 7 type validators
-- ✓ File, environment, and Vault sources
+- ✓ File, environment, Vault, and AWS Secrets Manager sources
 - ✓ Configuration clarity (diff, explain, preview)
 
 **V2 (Planned):**
