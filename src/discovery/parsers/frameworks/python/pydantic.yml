@@ -1,0 +1,79 @@
+# Pydantic Settings Framework Support
+# Detects environment variables from Pydantic Settings class field declarations
+
+name: "Pydantic Settings"
+language: "python"
+version: "1.0.0"
+description: "Detects Pydantic Settings class fields that map to environment variables"
+
+# Auto-detection configuration
+detection:
+  files:
+    - "settings.py"
+    - "config.py"
+    - "**/settings.py"
+    - "**/config.py"
+
+  patterns:
+    requirements_txt: "pydantic"
+    pyproject_toml: "pydantic"
+    pipfile: "pydantic"
+
+# Tree-sitter query patterns
+queries:
+  - name: "Pydantic Field with env annotation"
+    description: "Matches Field(..., env='VAR_NAME') patterns"
+    pattern: |
+      (call
+        function: (identifier) @field (#eq? @field "Field")
+        arguments: (argument_list
+          (keyword_argument
+            name: (identifier) @env_param (#eq? @env_param "env")
+            value: (string) @key_string))) @access
+
+    key_capture: "key_string"
+    confidence: "high"
+
+  - name: "Standard os.environ/os.getenv in Pydantic classes"
+    description: "Matches os.environ or os.getenv in Settings class context"
+    pattern: |
+      (call
+        function: (attribute
+          object: (identifier) @os (#eq? @os "os")
+          attribute: (identifier) @getenv (#eq? @getenv "getenv"))
+        arguments: (argument_list
+          (string) @key_string)) @access
+
+    key_capture: "key_string"
+    confidence: "medium"
+
+# Type inference rules
+type_inference:
+  # Infer from Pydantic type annotations
+  by_python_type:
+    "str": "string"
+    "int": "integer"
+    "bool": "boolean"
+    "HttpUrl": "url"
+    "AnyUrl": "url"
+    "PostgresDsn": "connection_string"
+    "MySQLDsn": "connection_string"
+    "RedisDsn": "connection_string"
+    "SecretStr": "secret"
+
+  by_name_pattern:
+    - pattern: "(?i)secret|key|token|password"
+      type: "secret"
+      confidence: "high"
+    - pattern: "(?i)_url$|_uri$|_dsn$"
+      type: "url"
+      confidence: "medium"
+    - pattern: "(?i)database_url|db_url"
+      type: "connection_string"
+      confidence: "high"
+    - pattern: "(?i)debug|enabled?"
+      type: "boolean"
+      confidence: "medium"
+    - pattern: "(?i)port$|timeout$|limit$"
+      type: "integer"
+      confidence: "medium"

@@ -1,6 +1,7 @@
 const std = @import("std");
 const zcli = @import("zcli");
 const yaml = @import("yaml");
+const discovery = @import("discovery");
 
 pub const meta = .{
     .description = "Initialize ConfigFlow in the current directory",
@@ -40,30 +41,24 @@ pub fn execute(_: Args, options: Options, context: *zcli.Context) !void {
         try stdout.print("Initializing ConfigFlow...\n", .{});
     }
 
-    // Look for existing .env file
-    const env_path = ".env";
-    const env_exists = checkFileExists(env_path);
-
-    if (!env_exists) {
-        try stdout.print("\nNo .env file found.\n", .{});
-        try stdout.print("ConfigFlow works best when initialized from an existing .env file.\n", .{});
-        try stdout.print("Create a .env file first or run this command in a directory with one.\n", .{});
-        return;
-    }
-
-    try stdout.print("\nFound .env file, parsing...\n", .{});
-
-    // Parse .env file
-    const env_contents = try readFile(allocator, env_path);
-    defer allocator.free(env_contents);
-
-    const entries = try parseEnvFile(allocator, env_contents);
+    // Discover environment variables from all sources
+    const entries = try discoverAllSources(allocator, stdout, stderr);
     defer {
         for (entries) |entry| {
             allocator.free(entry.key);
             allocator.free(entry.value);
+            if (entry.default_value) |val| {
+                allocator.free(val);
+            }
         }
         allocator.free(entries);
+    }
+
+    if (entries.len == 0) {
+        try stdout.print("\n No environment variables found.\n", .{});
+        try stdout.print("ConfigFlow couldn't find any environment variables in your codebase or .env file.\n", .{});
+        try stdout.print("Make sure you're in the right directory.\n", .{});
+        return;
     }
 
     try stdout.print("Found {} environment variable(s)\n\n", .{entries.len});
@@ -146,6 +141,168 @@ pub fn execute(_: Args, options: Options, context: *zcli.Context) !void {
     try stdout.print("Output configuration saved to .configflow/config.yml\n", .{});
 }
 
+fn discoverAllSources(allocator: std.mem.Allocator, stdout: anytype, stderr: anytype) ![]EnvEntry {
+    _ = stderr;
+
+    try stdout.print("\n🔍 Discovering environment variables...\n", .{});
+
+    // Track discovered variables by name to deduplicate
+    var discovered_vars = std.StringHashMap(EnvEntry).init(allocator);
+    defer {
+        var it = discovered_vars.iterator();
+        while (it.next()) |entry| {
+            allocator.free(entry.key_ptr.*);
+            allocator.free(entry.value_ptr.key);
+            allocator.free(entry.value_ptr.value);
+        }
+        discovered_vars.deinit();
+    }
+
+    // 1. Discover from source code
+    try stdout.print("  • Scanning source code...\n", .{});
+    var coord = try discovery.Coordinator.init(allocator);
+    defer coord.deinit();
+
+    const result = discover_result: {
+        break :discover_result coord.discover(".", std.Progress.Node.none) catch |err| {
+            // If discovery fails, continue with just .env
+            try stdout.print("    Warning: Source code discovery failed: {}\n", .{err});
+            break :discover_result discovery.DiscoveryResult{
+                .env_vars = &.{},
+                .warnings = &.{},
+                .files_scanned = 0,
+                .allocator = allocator,
+            };
+        };
+    };
+    defer {
+        var mut_result = result;
+        mut_result.deinit();
+    }
+
+    if (result.env_vars.len > 0) {
+        try stdout.print("    Found {} variable(s) in {} file(s)\n", .{ result.env_vars.len, result.files_scanned });
+
+        // Add discovered variables
+        for (result.env_vars) |env_var| {
+            // Extract first default value if any were detected
+            const default_value = if (env_var.default_values.len > 0)
+                try allocator.dupe(u8, env_var.default_values[0])
+            else
+                null;
+
+            const entry = EnvEntry{
+                .key = try allocator.dupe(u8, env_var.name),
+                .value = try getValueForVariable(allocator, env_var.name, env_var.inferred_type),
+                .inferred_type = mapDiscoveryTypeToConfigType(env_var.inferred_type),
+                .default_value = default_value,
+            };
+
+            // Store with key duplication for the hashmap
+            const key = try allocator.dupe(u8, env_var.name);
+            try discovered_vars.put(key, entry);
+        }
+    }
+
+    // 2. Parse .env file if it exists
+    const env_path = ".env";
+    if (checkFileExists(env_path)) {
+        try stdout.print("  • Parsing .env file...\n", .{});
+
+        const env_contents = try readFile(allocator, env_path);
+        defer allocator.free(env_contents);
+
+        const env_entries = try parseEnvFile(allocator, env_contents);
+        defer {
+            for (env_entries) |entry| {
+                allocator.free(entry.key);
+                allocator.free(entry.value);
+                if (entry.default_value) |val| {
+                    allocator.free(val);
+                }
+            }
+            allocator.free(env_entries);
+        }
+
+        try stdout.print("    Found {} variable(s)\n", .{env_entries.len});
+
+        // Merge .env entries
+        for (env_entries) |env_entry| {
+            if (discovered_vars.getPtr(env_entry.key)) |existing| {
+                // Variable already discovered in code - update value with .env value
+                allocator.free(existing.value);
+                existing.value = try allocator.dupe(u8, env_entry.value);
+            } else {
+                // New variable from .env - add it (no default value since not in code)
+                const entry = EnvEntry{
+                    .key = try allocator.dupe(u8, env_entry.key),
+                    .value = try allocator.dupe(u8, env_entry.value),
+                    .inferred_type = env_entry.inferred_type,
+                    .default_value = null,
+                };
+                const key = try allocator.dupe(u8, env_entry.key);
+                try discovered_vars.put(key, entry);
+            }
+        }
+    }
+
+    // Convert hashmap to array
+    var final_entries = std.ArrayList(EnvEntry){};
+    defer final_entries.deinit(allocator);
+
+    var it = discovered_vars.valueIterator();
+    while (it.next()) |entry| {
+        // Duplicate default value if it exists
+        const default_value = if (entry.default_value) |val|
+            try allocator.dupe(u8, val)
+        else
+            null;
+
+        try final_entries.append(allocator, .{
+            .key = try allocator.dupe(u8, entry.key),
+            .value = try allocator.dupe(u8, entry.value),
+            .inferred_type = entry.inferred_type,
+            .default_value = default_value,
+        });
+    }
+
+    return final_entries.toOwnedSlice(allocator);
+}
+
+fn getValueForVariable(allocator: std.mem.Allocator, var_name: []const u8, var_type: discovery.ConfigType) ![]u8 {
+    // Try to get value from shell environment
+    if (std.process.getEnvVarOwned(allocator, var_name)) |value| {
+        return value;
+    } else |_| {
+        // Not in environment - return placeholder based on type
+        return allocator.dupe(u8, getPlaceholderValue(var_type));
+    }
+}
+
+fn mapDiscoveryTypeToConfigType(discovery_type: discovery.ConfigType) ConfigType {
+    return switch (discovery_type) {
+        .string => .string,
+        .integer => .integer,
+        .boolean => .boolean,
+        .url => .url,
+        .connection_string => .connection_string,
+        .secret => .secret,
+        .email => .string, // Map email to string for now
+    };
+}
+
+fn getPlaceholderValue(config_type: discovery.ConfigType) []const u8 {
+    return switch (config_type) {
+        .string => "",
+        .integer => "0",
+        .boolean => "false",
+        .url => "https://example.com",
+        .connection_string => "postgresql://user:password@localhost:5432/database",
+        .secret => "your-secret-here",
+        .email => "user@example.com",
+    };
+}
+
 fn generateConfigYaml(allocator: std.mem.Allocator, format: []const u8, path: []const u8) !void {
     var yaml_content = std.ArrayList(u8){};
     defer yaml_content.deinit(allocator);
@@ -202,6 +359,11 @@ fn generateSchemaYaml(allocator: std.mem.Allocator, entries: []ConfigEntry) !voi
 
         if (entry.description.len > 0) {
             try writer.print("    description: \"{s}\"\n", .{entry.description});
+        }
+
+        // Add default value if detected from code
+        if (entry.default_value) |default_val| {
+            try writer.print("    default: \"{s}\"  # Detected from code\n", .{default_val});
         }
 
         // Add source mappings (reference the sources defined above)
@@ -269,11 +431,18 @@ fn runWizard(allocator: std.mem.Allocator, context: *zcli.Context, entries: []En
         var desc_reader = std.fs.File.stdin().reader(&desc_buffer);
         const description = try readLine(allocator, &desc_reader.interface);
 
+        // Extract default value if it exists in the entry
+        const default_value = if (entry.default_value) |val|
+            try allocator.dupe(u8, val)
+        else
+            null;
+
         try config_entries.append(allocator, .{
             .key = try allocator.dupe(u8, entry.key),
             .config_type = config_type,
             .required = required,
             .description = description,
+            .default_value = default_value,
         });
 
         try stdout.print("\n", .{});
@@ -339,6 +508,7 @@ const EnvEntry = struct {
     key: []u8,
     value: []u8,
     inferred_type: ConfigType,
+    default_value: ?[]u8,
 };
 
 const ConfigEntry = struct {
@@ -346,10 +516,14 @@ const ConfigEntry = struct {
     config_type: ConfigType,
     required: bool,
     description: []u8,
+    default_value: ?[]u8,
 
     fn deinit(self: ConfigEntry, allocator: std.mem.Allocator) void {
         allocator.free(self.key);
         allocator.free(self.description);
+        if (self.default_value) |val| {
+            allocator.free(val);
+        }
     }
 };
 
@@ -426,6 +600,7 @@ fn parseEnvFile(allocator: std.mem.Allocator, contents: []const u8) ![]EnvEntry 
                 .key = try allocator.dupe(u8, key),
                 .value = try allocator.dupe(u8, value),
                 .inferred_type = inferred,
+                .default_value = null, // .env files don't have code-detected defaults
             });
         }
     }
@@ -512,6 +687,9 @@ test "parseEnvFile - basic" {
         for (entries) |entry| {
             allocator.free(entry.key);
             allocator.free(entry.value);
+            if (entry.default_value) |val| {
+                allocator.free(val);
+            }
         }
         allocator.free(entries);
     }
@@ -540,6 +718,9 @@ test "parseEnvFile - with comments and empty lines" {
         for (entries) |entry| {
             allocator.free(entry.key);
             allocator.free(entry.value);
+            if (entry.default_value) |val| {
+                allocator.free(val);
+            }
         }
         allocator.free(entries);
     }
@@ -557,6 +738,9 @@ test "parseEnvFile - with spaces" {
         for (entries) |entry| {
             allocator.free(entry.key);
             allocator.free(entry.value);
+            if (entry.default_value) |val| {
+                allocator.free(val);
+            }
         }
         allocator.free(entries);
     }
@@ -585,6 +769,9 @@ test "parseEnvFile - edge cases" {
         for (entries) |entry| {
             allocator.free(entry.key);
             allocator.free(entry.value);
+            if (entry.default_value) |val| {
+                allocator.free(val);
+            }
         }
         allocator.free(entries);
     }
@@ -636,6 +823,9 @@ test "parseEnvFile - values with equals signs" {
         for (entries) |entry| {
             allocator.free(entry.key);
             allocator.free(entry.value);
+            if (entry.default_value) |val| {
+                allocator.free(val);
+            }
         }
         allocator.free(entries);
     }
@@ -659,6 +849,9 @@ test "parseEnvFile - special characters in values" {
         for (entries) |entry| {
             allocator.free(entry.key);
             allocator.free(entry.value);
+            if (entry.default_value) |val| {
+                allocator.free(val);
+            }
         }
         allocator.free(entries);
     }
@@ -682,6 +875,9 @@ test "parseEnvFile - windows line endings" {
         for (entries) |entry| {
             allocator.free(entry.key);
             allocator.free(entry.value);
+            if (entry.default_value) |val| {
+                allocator.free(val);
+            }
         }
         allocator.free(entries);
     }
@@ -703,6 +899,9 @@ test "parseEnvFile - no trailing newline" {
         for (entries) |entry| {
             allocator.free(entry.key);
             allocator.free(entry.value);
+            if (entry.default_value) |val| {
+                allocator.free(val);
+            }
         }
         allocator.free(entries);
     }
@@ -729,6 +928,9 @@ test "parseEnvFile - mixed valid and invalid lines" {
         for (entries) |entry| {
             allocator.free(entry.key);
             allocator.free(entry.value);
+            if (entry.default_value) |val| {
+                allocator.free(val);
+            }
         }
         allocator.free(entries);
     }
@@ -752,6 +954,9 @@ test "parseEnvFile - very long values" {
         for (entries) |entry| {
             allocator.free(entry.key);
             allocator.free(entry.value);
+            if (entry.default_value) |val| {
+                allocator.free(val);
+            }
         }
         allocator.free(entries);
     }
@@ -774,6 +979,9 @@ test "parseEnvFile - quotes in values" {
         for (entries) |entry| {
             allocator.free(entry.key);
             allocator.free(entry.value);
+            if (entry.default_value) |val| {
+                allocator.free(val);
+            }
         }
         allocator.free(entries);
     }

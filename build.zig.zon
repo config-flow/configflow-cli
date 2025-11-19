@@ -12,6 +12,30 @@
             .url = "https://github.com/ryanhair/zig-yaml/archive/cb57cafa2cd85bfa7c8df67ca55c63858d1ae61f.tar.gz",
             .hash = "zig_yaml-0.2.0-C1161qyrAgAyCAoCF3hCxhhU-KAr__1HU-wbT4JKujgJ",
         },
+        .tree_sitter = .{
+            .url = "https://github.com/tree-sitter/zig-tree-sitter/archive/refs/heads/master.tar.gz",
+            .hash = "tree_sitter-0.25.0-8heIf4KZAQB9VQhOgtGaSvAJFbBn1t08wtsrkce4uEnI",
+        },
+        .tree_sitter_javascript = .{
+            .url = "https://github.com/tree-sitter/tree-sitter-javascript/archive/refs/tags/v0.23.0.tar.gz",
+            .hash = "N-V-__8AAKNyNAAdLgRLbgt9qLfEoacS0uA7fULPPEY7ZuBF",
+        },
+        .tree_sitter_python = .{
+            .url = "https://github.com/tree-sitter/tree-sitter-python/archive/refs/tags/v0.23.2.tar.gz",
+            .hash = "N-V-__8AAG48PgAYvawI3pHheRyHSKf4nL-zgZTR1PMLheA4",
+        },
+        .tree_sitter_ruby = .{
+            .url = "https://github.com/tree-sitter/tree-sitter-ruby/archive/refs/tags/v0.20.1.tar.gz",
+            .hash = "N-V-__8AALyF7QDvsTqJQ-4iTdTxZoiAiBO6DthpI0nDJy2y",
+        },
+        .tree_sitter_java = .{
+            .url = "https://github.com/tree-sitter/tree-sitter-java/archive/refs/tags/v0.20.2.tar.gz",
+            .hash = "N-V-__8AAIqmLgDSgIztpJdwUu7VnHYEBllwy08hdBGSgUrs",
+        },
+        .tree_sitter_go = .{
+            .url = "https://github.com/tree-sitter/tree-sitter-go/archive/refs/tags/v0.23.1.tar.gz",
+            .hash = "N-V-__8AAFYXIQB0x3qgei2Cz45D15vb6pFgV7Ha97QxJ471",
+        },
     },
     .paths = .{
         "build.zig",

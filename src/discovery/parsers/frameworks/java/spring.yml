@@ -1,0 +1,73 @@
+# Spring Boot Framework Support
+# Detects environment variables from Spring @Value annotations
+
+name: "Spring Boot"
+language: "java"
+version: "1.0.0"
+description: "Detects Spring @Value annotations with property placeholders"
+
+# Auto-detection configuration
+detection:
+  # Files to look for
+  files:
+    - "pom.xml"
+    - "build.gradle"
+    - "build.gradle.kts"
+
+  # Patterns to match in those files
+  patterns:
+    pom_xml: "spring-boot-starter"
+    gradle: "org.springframework.boot"
+
+# Tree-sitter query patterns
+queries:
+  - name: "Spring @Value annotation"
+    description: "Matches @Value annotations with property placeholders"
+    pattern: |
+      (annotation
+        name: (identifier) @value_annotation (#eq? @value_annotation "Value")
+        arguments: (annotation_argument_list
+          (string_literal) @value_string)) @annotation_access
+
+    # Which capture group contains the env var reference
+    key_capture: "value_string"
+
+    # Confidence level for this pattern
+    confidence: "high"
+
+# Custom extractors for framework-specific syntax
+extractors:
+  - name: "spring_placeholder"
+    description: "Extract env var name from ${KEY} or ${KEY:default} syntax"
+    type: "regex"
+    # Regex with named groups: key and default
+    pattern: '\\$\\{([^:}]+)(?::([^}]+))?\\}'
+    key_group: 1
+    default_group: 2
+
+# Type inference rules
+type_inference:
+  # Infer type from field/variable type in Java
+  by_java_type:
+    "String": "string"
+    "Integer": "integer"
+    "int": "integer"
+    "Boolean": "boolean"
+    "boolean": "boolean"
+    "Long": "integer"
+    "long": "integer"
+
+  # Infer type from variable naming patterns
+  by_name_pattern:
+    - pattern: "(?i)port$"
+      type: "integer"
+      confidence: "high"
+    - pattern: "(?i)url$"
+      type: "url"
+      confidence: "medium"
+    - pattern: "(?i)secret|key|token|password"
+      type: "secret"
+      confidence: "high"
+    - pattern: "(?i)enabled?|debug"
+      type: "boolean"
+      confidence: "medium"

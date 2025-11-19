@@ -1,0 +1,86 @@
+# Django Framework Support (django-environ)
+# Detects environment variables from django-environ library patterns
+
+name: "Django"
+language: "python"
+version: "1.0.0"
+description: "Detects django-environ env() calls and typed methods"
+
+# Auto-detection configuration
+detection:
+  # Files to look for
+  files:
+    - "manage.py"
+    - "settings.py"
+    - "**/settings.py"
+    - "**/settings/*.py"
+
+  # Patterns to match in dependency files
+  patterns:
+    requirements_txt: "django-environ"
+    pyproject_toml: "django-environ"
+    pipfile: "django-environ"
+
+# Tree-sitter query patterns
+queries:
+  - name: "django-environ env() function calls"
+    description: "Matches env('KEY') or env('KEY', default='value') patterns"
+    pattern: |
+      (call
+        function: (identifier) @env_func (#match? @env_func "^env$")
+        arguments: (argument_list
+          . (string) @key_string)) @access
+
+    key_capture: "key_string"
+    confidence: "high"
+
+  - name: "django-environ typed method calls"
+    description: "Matches env.str('KEY'), env.bool('KEY'), env.int('KEY'), etc."
+    pattern: |
+      (call
+        function: (attribute
+          object: (identifier) @env_obj (#match? @env_obj "^env$")
+          attribute: (identifier) @method)
+        arguments: (argument_list
+          . (string) @key_string)) @access
+
+    key_capture: "key_string"
+    method_capture: "method"
+    confidence: "high"
+
+# Type inference rules
+type_inference:
+  # Infer type from django-environ method name
+  by_method:
+    "str": "string"
+    "int": "integer"
+    "bool": "boolean"
+    "float": "string"
+    "json": "json"
+    "list": "string"
+    "tuple": "string"
+    "dict": "json"
+    "url": "url"
+    "path": "string"
+    "db_url": "connection_string"
+    "cache_url": "connection_string"
+    "search_url": "connection_string"
+    "email_url": "connection_string"
+
+  # Infer type from variable naming patterns
+  by_name_pattern:
+    - pattern: "(?i)secret|key|token|password"
+      type: "secret"
+      confidence: "high"
+    - pattern: "(?i)_url$|_uri$"
+      type: "url"
+      confidence: "medium"
+    - pattern: "(?i)database_url|db_url"
+      type: "connection_string"
+      confidence: "high"
+    - pattern: "(?i)debug|enabled?"
+      type: "boolean"
+      confidence: "medium"
+    - pattern: "(?i)port$|timeout$|limit$"
+      type: "integer"
+      confidence: "medium"

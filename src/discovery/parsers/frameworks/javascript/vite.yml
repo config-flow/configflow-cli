@@ -1,0 +1,81 @@
+# Vite Framework Support
+# Detects Vite environment variables (import.meta.env.VITE_* prefix)
+
+name: "Vite"
+language: "javascript"
+version: "1.0.0"
+description: "Detects Vite environment variables with VITE_ prefix using import.meta.env"
+
+# Auto-detection configuration
+detection:
+  files:
+    - "package.json"
+    - "vite.config.js"
+    - "vite.config.ts"
+    - "vite.config.mjs"
+
+  patterns:
+    package_json: "\"vite\""
+
+# Tree-sitter query patterns
+queries:
+  - name: "import.meta.env.VITE_ access"
+    description: "Matches import.meta.env.VITE_* patterns"
+    pattern: |
+      (member_expression
+        object: (member_expression
+          object: (meta_property
+            (identifier) @import (#eq? @import "import")
+            (identifier) @meta (#eq? @meta "meta"))
+          property: (property_identifier) @env (#eq? @env "env"))
+        property: (property_identifier) @key (#match? @key "^VITE_")) @access
+
+    key_capture: "key"
+    confidence: "high"
+
+  - name: "import.meta.env string access"
+    description: "Matches import.meta.env['VITE_*'] syntax"
+    pattern: |
+      (subscript_expression
+        object: (member_expression
+          object: (meta_property
+            (identifier) @import (#eq? @import "import")
+            (identifier) @meta (#eq? @meta "meta"))
+          property: (property_identifier) @env (#eq? @env "env"))
+        index: (string) @key_string (#match? @key_string "VITE_")) @access
+
+    key_capture: "key_string"
+    confidence: "high"
+
+  - name: "import.meta.env.MODE and built-ins"
+    description: "Matches Vite built-in env vars like MODE, DEV, PROD"
+    pattern: |
+      (member_expression
+        object: (member_expression
+          object: (meta_property)
+          property: (property_identifier) @env (#eq? @env "env"))
+        property: (property_identifier) @key (#match? @key "^(MODE|DEV|PROD|SSR|BASE_URL)$")) @access
+
+    key_capture: "key"
+    confidence: "medium"
+
+# Type inference rules
+type_inference:
+  by_name_pattern:
+    - pattern: "(?i)vite_"
+      note: "Vite environment variables (exposed to client)"
+      type: "string"
+      confidence: "high"
+    - pattern: "(?i)port$"
+      type: "integer"
+      confidence: "high"
+    - pattern: "(?i)_url$|_uri$|api_url"
+      type: "url"
+      confidence: "medium"
+    - pattern: "(?i)secret|key|token|password|api_key"
+      type: "secret"
+      confidence: "high"
+    - pattern: "(?i)mode$"
+      type: "string"
+      confidence: "high"
+      note: "development, production, or test"

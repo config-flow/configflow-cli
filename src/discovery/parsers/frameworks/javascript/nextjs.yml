@@ -1,0 +1,75 @@
+# Next.js Framework Support
+# Detects Next.js environment variables (NEXT_PUBLIC_* prefix for client-side vars)
+
+name: "Next.js"
+language: "javascript"
+version: "1.0.0"
+description: "Detects Next.js environment variables with NEXT_PUBLIC_ prefix and process.env access"
+
+# Auto-detection configuration
+detection:
+  files:
+    - "package.json"
+    - "next.config.js"
+    - "next.config.mjs"
+
+  patterns:
+    package_json: "\"next\""
+
+# Tree-sitter query patterns
+queries:
+  - name: "process.env.NEXT_PUBLIC_ access"
+    description: "Matches process.env.NEXT_PUBLIC_* for client-side vars"
+    pattern: |
+      (member_expression
+        object: (member_expression
+          object: (identifier) @process (#eq? @process "process")
+          property: (property_identifier) @env (#eq? @env "env"))
+        property: (property_identifier) @key (#match? @key "^NEXT_PUBLIC_")) @access
+
+    key_capture: "key"
+    confidence: "high"
+
+  - name: "process.env string access with NEXT_PUBLIC_"
+    description: "Matches process.env['NEXT_PUBLIC_*'] syntax"
+    pattern: |
+      (subscript_expression
+        object: (member_expression
+          object: (identifier) @process (#eq? @process "process")
+          property: (property_identifier) @env (#eq? @env "env"))
+        index: (string) @key_string (#match? @key_string "NEXT_PUBLIC_")) @access
+
+    key_capture: "key_string"
+    confidence: "high"
+
+  - name: "Standard process.env access"
+    description: "Matches all process.env.KEY for server-side vars"
+    pattern: |
+      (member_expression
+        object: (member_expression
+          object: (identifier) @process (#eq? @process "process")
+          property: (property_identifier) @env (#eq? @env "env"))
+        property: (property_identifier) @key) @access
+
+    key_capture: "key"
+    confidence: "medium"
+
+# Type inference rules
+type_inference:
+  by_name_pattern:
+    - pattern: "(?i)next_public_"
+      note: "Client-side environment variables (exposed to browser)"
+      type: "string"
+      confidence: "high"
+    - pattern: "(?i)port$"
+      type: "integer"
+      confidence: "high"
+    - pattern: "(?i)_url$|_uri$|api_url"
+      type: "url"
+      confidence: "medium"
+    - pattern: "(?i)database_url|mongodb_uri"
+      type: "connection_string"
+      confidence: "high"
+    - pattern: "(?i)secret|key|token|password|api_key"
+      type: "secret"
+      confidence: "high"

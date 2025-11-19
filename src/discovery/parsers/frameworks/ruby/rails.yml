@@ -1,0 +1,89 @@
+# Ruby on Rails Framework Support
+# Detects environment variables from Rails.application.credentials and ENV access
+
+name: "Ruby on Rails"
+language: "ruby"
+version: "1.0.0"
+description: "Detects Rails credentials and ENV hash access patterns"
+
+# Auto-detection configuration
+detection:
+  files:
+    - "Gemfile"
+    - "config/application.rb"
+    - "config/environment.rb"
+    - "Rakefile"
+
+  patterns:
+    gemfile: "gem ['\"]rails['\"]"
+
+# Tree-sitter query patterns
+queries:
+  - name: "Rails.application.credentials access"
+    description: "Matches Rails.application.credentials.dig(:key) patterns"
+    pattern: |
+      (call
+        method: (identifier) @dig (#eq? @dig "dig")
+        receiver: (call
+          method: (identifier) @credentials (#eq? @credentials "credentials")
+          receiver: (call
+            method: (identifier) @application (#eq? @application "application")
+            receiver: (constant) @rails (#eq? @rails "Rails")))
+        arguments: (argument_list
+          (simple_symbol) @key_symbol)) @access
+
+    key_capture: "key_symbol"
+    confidence: "high"
+
+  - name: "Rails.application.credentials direct access"
+    description: "Matches Rails.application.credentials[:key] patterns"
+    pattern: |
+      (call
+        method: (identifier) @brackets (#eq? @brackets "[]")
+        receiver: (call
+          method: (identifier) @credentials (#eq? @credentials "credentials")
+          receiver: (call
+            method: (identifier) @application (#eq? @application "application")
+            receiver: (constant) @rails (#eq? @rails "Rails")))
+        arguments: (argument_list
+          (simple_symbol) @key_symbol)) @access
+
+    key_capture: "key_symbol"
+    confidence: "high"
+
+  - name: "Standard ENV[] access"
+    description: "Matches ENV['KEY'] and ENV.fetch('KEY') patterns"
+    pattern: |
+      (call
+        method: (identifier) @fetch (#eq? @fetch "[]")
+        receiver: (constant) @env (#eq? @env "ENV")
+        arguments: (argument_list
+          (string) @key_string)) @access
+
+    key_capture: "key_string"
+    confidence: "medium"
+
+# Type inference rules
+type_inference:
+  by_name_pattern:
+    - pattern: "(?i)secret|key|token|password|api_key"
+      type: "secret"
+      confidence: "high"
+    - pattern: "(?i)_url$|_uri$"
+      type: "url"
+      confidence: "medium"
+    - pattern: "(?i)database_url"
+      type: "connection_string"
+      confidence: "high"
+    - pattern: "(?i)redis_url"
+      type: "connection_string"
+      confidence: "high"
+    - pattern: "(?i)port$"
+      type: "integer"
+      confidence: "high"
+    - pattern: "(?i)debug|enabled?"
+      type: "boolean"
+      confidence: "medium"
+    - pattern: "(?i)timeout|limit|max_|min_"
+      type: "integer"
+      confidence: "medium"

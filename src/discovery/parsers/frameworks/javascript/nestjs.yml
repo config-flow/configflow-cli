@@ -1,0 +1,66 @@
+# NestJS Framework Support
+# Detects environment variables from @ConfigService decorators and ConfigModule patterns
+
+name: "NestJS"
+language: "javascript"
+version: "1.0.0"
+description: "Detects NestJS ConfigService usage and environment variable access"
+
+# Auto-detection configuration
+detection:
+  files:
+    - "package.json"
+    - "nest-cli.json"
+
+  patterns:
+    package_json: "@nestjs/core"
+
+# Tree-sitter query patterns
+queries:
+  - name: "ConfigService.get() method calls"
+    description: "Matches this.configService.get('KEY') patterns"
+    pattern: |
+      (call_expression
+        function: (member_expression
+          object: (member_expression
+            property: (property_identifier) @config (#match? @config "configService|config"))
+          property: (property_identifier) @get (#eq? @get "get"))
+        arguments: (arguments
+          . (string) @key_string)) @access
+
+    key_capture: "key_string"
+    confidence: "high"
+
+  - name: "Direct process.env access (standard Node.js pattern)"
+    description: "Matches process.env.KEY in NestJS context"
+    pattern: |
+      (member_expression
+        object: (member_expression
+          object: (identifier) @process (#eq? @process "process")
+          property: (property_identifier) @env (#eq? @env "env"))
+        property: (property_identifier) @key) @access
+
+    key_capture: "key"
+    confidence: "medium"
+
+# Type inference rules
+type_inference:
+  by_name_pattern:
+    - pattern: "(?i)port$"
+      type: "integer"
+      confidence: "high"
+    - pattern: "(?i)_url$|_uri$"
+      type: "url"
+      confidence: "medium"
+    - pattern: "(?i)database_url|mongodb_uri"
+      type: "connection_string"
+      confidence: "high"
+    - pattern: "(?i)secret|key|token|password|api_key"
+      type: "secret"
+      confidence: "high"
+    - pattern: "(?i)debug|enabled?|is_"
+      type: "boolean"
+      confidence: "medium"
+    - pattern: "(?i)timeout|limit|max_|min_"
+      type: "integer"
+      confidence: "medium"
